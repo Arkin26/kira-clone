@@ -1,13 +1,14 @@
 "use client";
 
 import { motion } from "framer-motion";
+import GlassSurface from "./ui/GlassSurface";
 
 const values = [
   {
     icon: (
       <svg
-        width="22"
-        height="22"
+        width="28"
+        height="28"
         viewBox="0 0 24 24"
         fill="none"
         stroke="currentColor"
@@ -24,8 +25,8 @@ const values = [
   {
     icon: (
       <svg
-        width="22"
-        height="22"
+        width="28"
+        height="28"
         viewBox="0 0 24 24"
         fill="none"
         stroke="currentColor"
@@ -44,8 +45,8 @@ const values = [
   {
     icon: (
       <svg
-        width="22"
-        height="22"
+        width="28"
+        height="28"
         viewBox="0 0 24 24"
         fill="none"
         stroke="currentColor"
@@ -64,8 +65,8 @@ const values = [
   {
     icon: (
       <svg
-        width="22"
-        height="22"
+        width="28"
+        height="28"
         viewBox="0 0 24 24"
         fill="none"
         stroke="currentColor"
@@ -87,11 +88,11 @@ export function ValuesSection() {
     <section
       style={{
         background: "#080808",
-        padding: "80px 48px",
+        padding: "80px 20%",
         display: "flex",
         alignItems: "center",
-        justifyContent: "center",
-        gap: "80px",
+        justifyContent: "space-between",
+        gap: "56px",
         fontFamily: "'Inter', sans-serif",
         minHeight: "320px",
       }}
@@ -101,7 +102,7 @@ export function ValuesSection() {
         whileInView={{ opacity: 1, x: 0 }}
         viewport={{ once: true, amount: 0.3 }}
         transition={{ duration: 0.9, ease: "easeOut" }}
-        style={{ flexShrink: 0, maxWidth: "440px", textAlign: "left" }}
+        style={{ flexShrink: 0, width: "36%", minWidth: "320px", textAlign: "left" }}
       >
         <span
           style={{
@@ -152,15 +153,15 @@ export function ValuesSection() {
         viewport={{ once: true, amount: 0.2 }}
         transition={{ duration: 1.0, delay: 0.2, ease: "easeOut" }}
         style={{
-          flex: 1,
+          flexShrink: 0,
           display: "grid",
           gridTemplateColumns: "1fr 1fr",
-          gap: "10px",
+          gap: "14px",
           background: "#080808",
-          padding: "10px",
+          padding: "13px",
           position: "relative",
-          maxWidth: "580px",
-          borderRadius: "24px",
+          width: "754px",
+          borderRadius: "31px",
           overflow: "visible",
         }}
       >
@@ -237,46 +238,79 @@ export function ValuesSection() {
             transition={{ duration: 0.7, delay: 0.3 + i * 0.1, ease: "easeOut" }}
             style={{
               background:
-                "radial-gradient(ellipse at 30% 20%, rgba(255,255,255,0.05) 0%, rgba(255,255,255,0.02) 50%, rgba(0,0,0,0) 100%), #111111",
-              borderRadius: "18px",
-              border: "1px solid rgba(255,255,255,0.09)",
-              padding: "28px 26px 32px",
+                "radial-gradient(ellipse at 30% 20%, rgba(158,255,214,0.08) 0%, rgba(158,255,214,0.02) 35%, rgba(0,0,0,0) 70%), #000000",
+              borderRadius: "23px",
+              border: "1px solid rgba(158,255,214,0.16)",
+              padding: "36px 34px 42px",
               display: "flex",
               flexDirection: "column",
               alignItems: "flex-start",
-              gap: "18px",
-              boxShadow: "inset 0 1px 0 rgba(255,255,255,0.06)",
+              gap: "23px",
+              boxShadow:
+                "inset 0 1px 0 rgba(255,255,255,0.05), inset 0 0 24px rgba(158,255,214,0.08)",
             }}
           >
-            <div
+            <GlassSurface
+              width={57}
+              height={57}
+              borderRadius={29}
+              borderWidth={0.08}
+              brightness={55}
+              opacity={0.9}
+              blur={10}
+              backgroundOpacity={0.04}
+              saturation={1.1}
+              distortionScale={-160}
+              redOffset={0}
+              greenOffset={10}
+              blueOffset={20}
+              mixBlendMode="screen"
               style={{
-                width: "40px",
-                height: "40px",
-                borderRadius: "50%",
-                background:
-                  "radial-gradient(circle at 40% 35%, rgba(255,255,255,0.14) 0%, rgba(255,255,255,0.06) 50%, rgba(0,0,0,0.2) 100%)",
-                border: "1px solid rgba(255,255,255,0.13)",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                color: "rgba(255,255,255,0.85)",
-                boxShadow: "inset 0 1px 0 rgba(255,255,255,0.12), 0 2px 8px rgba(0,0,0,0.4)",
+                position: "relative",
+                overflow: "hidden",
+                color: "rgba(255,255,255,0.9)",
+                border: "1px solid rgba(158,255,214,0.28)",
+                boxShadow: "inset 0 0 14px rgba(158,255,214,0.2), 0 0 18px rgba(158,255,214,0.12)",
               }}
             >
-              {item.icon}
-            </div>
+              <div
+                style={{
+                  position: "absolute",
+                  left: 0,
+                  right: 0,
+                  bottom: 0,
+                  height: "33%",
+                  background:
+                    "radial-gradient(ellipse at 50% 120%, rgba(158,255,214,0.92) 0%, rgba(158,255,214,0.45) 45%, rgba(158,255,214,0) 100%)",
+                  filter: "blur(2px)",
+                  pointerEvents: "none",
+                  zIndex: 0,
+                }}
+              />
+              <div
+                style={{
+                  position: "relative",
+                  zIndex: 1,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
+                {item.icon}
+              </div>
+            </GlassSurface>
             <div
               style={{
                 display: "flex",
                 flexDirection: "column",
                 alignItems: "flex-start",
-                gap: "8px",
+                gap: "10px",
                 textAlign: "left",
               }}
             >
               <h3
                 style={{
-                  fontSize: "20px",
+                  fontSize: "26px",
                   fontWeight: 600,
                   color: "rgba(255,255,255,0.92)",
                   margin: 0,
@@ -288,7 +322,7 @@ export function ValuesSection() {
               </h3>
               <p
                 style={{
-                  fontSize: "13px",
+                  fontSize: "17px",
                   color: "rgba(255,255,255,0.35)",
                   lineHeight: 1.65,
                   margin: 0,
