@@ -2,7 +2,6 @@
 
 import Image, { StaticImageData } from "next/image";
 import { motion, useMotionValue, useSpring, useTransform } from "framer-motion";
-import GlowArc from "./GlowArc";
 import GlassSurface from "./ui/GlassSurface";
 
 import bitcoinIcon from "../../../icons8-bitcoin-logo-24.png";
@@ -32,19 +31,19 @@ const TOKENS: TokenIcon[] = [
   { name: "US Dollar", src: usdCircledIcon },
 ];
 
-const ACCENT = "#9EFFD6";
 const ACCENT_RGB = "158, 255, 214";
 
+/** Horizontally symmetric around 50%; vertical spread centered in the grid box */
 const CARD_POSITIONS = [
-  { left: "50%", top: "2%", z: 6 },
-  { left: "32%", top: "18%", z: 5 },
-  { left: "68%", top: "18%", z: 5 },
-  { left: "11%", top: "34%", z: 4 },
-  { left: "50%", top: "34%", z: 7 },
-  { left: "89%", top: "34%", z: 4 },
-  { left: "32%", top: "50%", z: 5 },
-  { left: "68%", top: "50%", z: 5 },
-  { left: "50%", top: "66%", z: 6 },
+  { left: "50%", top: "8%", z: 6 },
+  { left: "32%", top: "22%", z: 5 },
+  { left: "68%", top: "22%", z: 5 },
+  { left: "12%", top: "38%", z: 4 },
+  { left: "50%", top: "38%", z: 7 },
+  { left: "88%", top: "38%", z: 4 },
+  { left: "32%", top: "54%", z: 5 },
+  { left: "68%", top: "54%", z: 5 },
+  { left: "50%", top: "70%", z: 6 },
 ] as const;
 
 export function TokenSection() {
@@ -125,57 +124,45 @@ export function TokenSection() {
         </h2>
       </div>
 
-      {/* Full section width so arc can span 100vw; glow sits behind the carousel */}
-      <div
+      <motion.div
+        data-debug="token-carousel"
+        initial={{ opacity: 0, y: 18 }}
+        whileInView={{ opacity: 1, y: 0 }}
+        viewport={{ once: true, amount: 0.2 }}
+        transition={{ duration: 0.85, ease: "easeOut" }}
+        onMouseMove={(event) => {
+          const bounds = event.currentTarget.getBoundingClientRect();
+          const x = (event.clientX - bounds.left) / bounds.width - 0.5;
+          const y = (event.clientY - bounds.top) / bounds.height - 0.5;
+          pointerX.set(x);
+          pointerY.set(y);
+        }}
+        onMouseLeave={() => {
+          pointerX.set(0);
+          pointerY.set(0);
+        }}
         style={{
-          alignSelf: "stretch",
-          width: "100%",
+          width: "min(96vw, 1060px)",
+          maxWidth: "100%",
           minHeight: "560px",
+          overflow: "visible",
           position: "relative",
+          marginLeft: "auto",
+          marginRight: "auto",
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          justifyContent: "center",
           zIndex: 1,
+          transformStyle: "preserve-3d",
+          perspective: "1200px",
         }}
       >
-        <GlowArc
-          style={{
-            top: "calc(50% - min(150px, 16vh))",
-            height: "min(476px, 54.4vh)",
-            transform: "translateY(-40%)",
-            zIndex: 0,
-          }}
-        />
-
-        <motion.div
-          data-debug="token-carousel"
-          initial={{ opacity: 0, y: 18 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true, amount: 0.2 }}
-          transition={{ duration: 0.85, ease: "easeOut" }}
-          onMouseMove={(event) => {
-            const bounds = event.currentTarget.getBoundingClientRect();
-            const x = (event.clientX - bounds.left) / bounds.width - 0.5;
-            const y = (event.clientY - bounds.top) / bounds.height - 0.5;
-            pointerX.set(x);
-            pointerY.set(y);
-          }}
-          onMouseLeave={() => {
-            pointerX.set(0);
-            pointerY.set(0);
-          }}
-          style={{
-            width: "min(96vw, 1060px)",
-            minHeight: "560px",
-            overflow: "visible",
-            position: "relative",
-            margin: "0 auto",
-            zIndex: 1,
-            transformStyle: "preserve-3d",
-            perspective: "1200px",
-          }}
-        >
         <motion.div
           style={{
             width: "100%",
-            height: "100%",
+            flex: "1 1 auto",
+            minHeight: "520px",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
@@ -190,9 +177,12 @@ export function TokenSection() {
           <div
             style={{
               position: "relative",
-              width: "880px",
-              maxWidth: "96%",
+              width: "min(880px, 100%)",
+              maxWidth: "100%",
               height: "500px",
+              marginLeft: "auto",
+              marginRight: "auto",
+              boxSizing: "border-box",
             }}
           >
             {TOKENS.map((token, index) => {
@@ -214,9 +204,13 @@ export function TokenSection() {
                     height: "150px",
                     borderRadius: "26px",
                     background:
-                      "linear-gradient(160deg, rgba(255,255,255,0.07) 0%, rgba(255,255,255,0.02) 100%)",
-                    border: `1px solid rgba(${ACCENT_RGB},0.12)`,
-                    boxShadow: `inset 0 1px 0 rgba(255,255,255,0.07), 0 16px 40px rgba(0,0,0,0.5), 0 0 36px rgba(${ACCENT_RGB},0.08)`,
+                      "linear-gradient(160deg, rgba(255,255,255,0.06) 0%, rgba(255,255,255,0.02) 100%)",
+                    border: `1px solid rgba(${ACCENT_RGB},0.28)`,
+                    boxShadow: [
+                      `inset 0 0 32px rgba(${ACCENT_RGB},0.12)`,
+                      "inset 0 1px 0 rgba(255,255,255,0.07)",
+                      "0 16px 40px rgba(0,0,0,0.5)",
+                    ].join(", "),
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
@@ -240,31 +234,28 @@ export function TokenSection() {
                     style={{
                       position: "relative",
                       overflow: "hidden",
-                      border: `1px solid rgba(${ACCENT_RGB},0.35)`,
-                      boxShadow: `inset 0 0 16px rgba(${ACCENT_RGB},0.2), 0 8px 22px rgba(0,0,0,0.35), 0 0 22px rgba(${ACCENT_RGB},0.12)`,
+                      border: `1px solid rgba(${ACCENT_RGB},0.38)`,
+                      boxShadow: [
+                        `inset 0 0 20px rgba(${ACCENT_RGB},0.2)`,
+                        `inset 0 -10px 18px rgba(${ACCENT_RGB},0.1)`,
+                        "0 8px 22px rgba(0,0,0,0.35)",
+                      ].join(", "),
                       display: "flex",
                       alignItems: "center",
                       justifyContent: "center",
                     }}
                   >
-                    {/* Circular pool of light — center below circle so edge is a smooth arc, not a flat line */}
                     <div
                       style={{
                         position: "absolute",
-                        inset: "-8%",
+                        inset: 0,
                         borderRadius: "50%",
                         pointerEvents: "none",
                         zIndex: 0,
-                        background: `radial-gradient(circle at 50% 122%,
-                          ${ACCENT} 0%,
-                          rgba(${ACCENT_RGB},0.55) 22%,
-                          rgba(${ACCENT_RGB},0.22) 48%,
-                          rgba(${ACCENT_RGB},0.06) 62%,
-                          transparent 76%)`,
-                        filter: "blur(2px)",
+                        background: `radial-gradient(circle at 50% 118%, rgba(${ACCENT_RGB},0.35) 0%, rgba(${ACCENT_RGB},0.08) 42%, transparent 62%)`,
+                        filter: "blur(3px)",
                       }}
                     />
-
                     <div
                       style={{
                         position: "relative",
@@ -283,7 +274,7 @@ export function TokenSection() {
                           width: "100%",
                           height: "100%",
                           objectFit: "contain",
-                          filter: `drop-shadow(0 0 8px rgba(${ACCENT_RGB},0.45))`,
+                          filter: "drop-shadow(0 0 4px rgba(255,255,255,0.25))",
                         }}
                       />
                     </div>
@@ -293,8 +284,7 @@ export function TokenSection() {
             })}
           </div>
         </motion.div>
-        </motion.div>
-      </div>
+      </motion.div>
     </section>
   );
 }
