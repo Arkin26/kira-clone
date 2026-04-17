@@ -1,6 +1,6 @@
 import { HeroSection } from "@/components/HeroSection";
 import { Navbar } from "@/components/Navbar";
-import { ValuesSection } from "@/components/ValuesSection";
+import { ValuesTokenSectionsGroup } from "@/components/ValuesTokenSectionsGroup";
 
 export default function HomePage() {
   return (
@@ -8,7 +8,7 @@ export default function HomePage() {
       <Navbar />
       <main>
         <HeroSection />
-        <ValuesSection />
+        <ValuesTokenSectionsGroup />
 
         <section
           id="how-it-works"

@@ -1,5 +1,6 @@
 "use client";
 
+import { forwardRef } from "react";
 import { motion } from "framer-motion";
 import GlassSurface from "./ui/GlassSurface";
 
@@ -86,11 +87,13 @@ const values = [
   },
 ];
 
-export function ValuesSection() {
+export const ValuesSection = forwardRef<HTMLElement>(function ValuesSection(_, ref) {
   return (
     <section
+      ref={ref}
       style={{
-        background: "#000000",
+        position: "relative",
+        background: "transparent",
         width: "100%",
         maxWidth: "100%",
         boxSizing: "border-box",
@@ -109,6 +112,8 @@ export function ValuesSection() {
         viewport={{ once: true, amount: 0.3 }}
         transition={{ duration: 0.9, ease: "easeOut" }}
         style={{
+          position: "relative",
+          zIndex: 1,
           flexShrink: 0,
           width: "min(44vw, 620px)",
           minWidth: "500px",
@@ -152,7 +157,7 @@ export function ValuesSection() {
             maxWidth: "340px",
           }}
         >
-          We're on a mission to bring transparency to finance and show your upfront.
+          We&apos;re on a mission to bring transparency to finance and show your upfront.
         </p>
       </motion.div>
 
@@ -162,13 +167,14 @@ export function ValuesSection() {
         viewport={{ once: true, amount: 0.2 }}
         transition={{ duration: 1.0, delay: 0.2, ease: "easeOut" }}
         style={{
+          position: "relative",
+          zIndex: 1,
           flexShrink: 0,
           display: "grid",
           gridTemplateColumns: "1fr 1fr",
           gap: "16px",
           background: "#000000",
           padding: "13px",
-          position: "relative",
           width: "600px",
           minWidth: "500px",
           borderRadius: "31px",
@@ -305,4 +311,5 @@ export function ValuesSection() {
       </motion.div>
     </section>
   );
-}
+});
+
