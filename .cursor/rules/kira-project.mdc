@@ -1,0 +1,5 @@
+---
+alwaysApply: true
+---
+
+Always use TypeScript with strict type checking. Prefer NestJS best practices: use Dependency Injection, Modules, and Services. For Prisma, always use a singleton client pattern. Follow a clean architecture where business logic is separated from controllers. Use DTOs for request validation with class-validator. For Solana interactions, handle RPC errors gracefully with retry logic. Keep code modular, dry, and documented with JSDoc
