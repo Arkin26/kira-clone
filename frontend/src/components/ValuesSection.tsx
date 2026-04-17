@@ -1,12 +1,10 @@
 "use client";
 
-import { useEffect, useRef } from "react";
 import { motion } from "framer-motion";
 import GlassSurface from "./ui/GlassSurface";
 
 const LEFT_BLOCK_OFFSET_X = -150;
 const RIGHT_BLOCK_OFFSET_X = -30;
-const BOX_GAP_PX = 16;
 
 const values = [
   {
@@ -89,93 +87,10 @@ const values = [
 ];
 
 export function ValuesSection() {
-  const gridRef = useRef<HTMLDivElement | null>(null);
-  const hGlowRef = useRef<HTMLDivElement | null>(null);
-  const vGlowRef = useRef<HTMLDivElement | null>(null);
-
-  useEffect(() => {
-    const gridEl = gridRef.current;
-    const hGlowEl = hGlowRef.current;
-    const vGlowEl = vGlowRef.current;
-    if (!gridEl || !hGlowEl || !vGlowEl) return;
-
-    const gridRect = gridEl.getBoundingClientRect();
-    const hRect = hGlowEl.getBoundingClientRect();
-    const vRect = vGlowEl.getBoundingClientRect();
-    const gridStyle = window.getComputedStyle(gridEl);
-
-    // #region agent log
-    fetch("http://127.0.0.1:7784/ingest/028dba60-64b1-4274-9067-3a7dd7d92fbe", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "7f8699" },
-      body: JSON.stringify({
-        sessionId: "7f8699",
-        runId: "pre-fix",
-        hypothesisId: "H1",
-        location: "ValuesSection.tsx:useEffect",
-        message: "Gap vs glow thickness",
-        data: {
-          boxGapPx: BOX_GAP_PX,
-          computedGridGap: gridStyle.gap,
-          horizontalGlowHeight: hRect.height,
-          verticalGlowWidth: vRect.width,
-        },
-        timestamp: Date.now(),
-      }),
-    }).catch(() => {});
-    // #endregion
-
-    // #region agent log
-    fetch("http://127.0.0.1:7784/ingest/028dba60-64b1-4274-9067-3a7dd7d92fbe", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "7f8699" },
-      body: JSON.stringify({
-        sessionId: "7f8699",
-        runId: "pre-fix",
-        hypothesisId: "H2",
-        location: "ValuesSection.tsx:useEffect",
-        message: "Glow span inside grid bounds",
-        data: {
-          gridHeight: gridRect.height,
-          gridWidth: gridRect.width,
-          horizontalGlowWidth: hRect.width,
-          verticalGlowHeight: vRect.height,
-          horizontalLeftInset: hRect.left - gridRect.left,
-          horizontalRightInset: gridRect.right - hRect.right,
-          verticalTopInset: vRect.top - gridRect.top,
-          verticalBottomInset: gridRect.bottom - vRect.bottom,
-        },
-        timestamp: Date.now(),
-      }),
-    }).catch(() => {});
-    // #endregion
-
-    // #region agent log
-    fetch("http://127.0.0.1:7784/ingest/028dba60-64b1-4274-9067-3a7dd7d92fbe", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "7f8699" },
-      body: JSON.stringify({
-        sessionId: "7f8699",
-        runId: "pre-fix",
-        hypothesisId: "H3",
-        location: "ValuesSection.tsx:useEffect",
-        message: "Grid overflow clipping behavior",
-        data: {
-          overflow: gridStyle.overflow,
-          overflowX: gridStyle.overflowX,
-          overflowY: gridStyle.overflowY,
-          borderRadius: gridStyle.borderRadius,
-        },
-        timestamp: Date.now(),
-      }),
-    }).catch(() => {});
-    // #endregion
-  }, []);
-
   return (
     <section
       style={{
-        background: "#080808",
+        background: "#000000",
         width: "100%",
         maxWidth: "100%",
         boxSizing: "border-box",
@@ -242,7 +157,6 @@ export function ValuesSection() {
       </motion.div>
 
       <motion.div
-        ref={gridRef}
         initial={{ opacity: 0, y: 20, x: RIGHT_BLOCK_OFFSET_X }}
         whileInView={{ opacity: 1, y: 0, x: RIGHT_BLOCK_OFFSET_X }}
         viewport={{ once: true, amount: 0.2 }}
@@ -251,8 +165,8 @@ export function ValuesSection() {
           flexShrink: 0,
           display: "grid",
           gridTemplateColumns: "1fr 1fr",
-          gap: `${BOX_GAP_PX}px`,
-          background: "#080808",
+          gap: "16px",
+          background: "#000000",
           padding: "13px",
           position: "relative",
           width: "600px",
@@ -270,43 +184,16 @@ export function ValuesSection() {
           }}
         >
           <div
-            ref={hGlowRef}
             style={{
               position: "absolute",
-              left: "10%",
               top: "50%",
-              transform: "translateY(-50%)",
-              width: "80%",
-              height: `${BOX_GAP_PX}px`,
+                left: "50%",
+                transform: "translate(-50%, -50%)",
+                width: "320px",
+                height: "320px",
               background:
-                "linear-gradient(to right, rgba(223,243,234,0) 0%, rgba(223,243,234,0.04) 30%, rgba(223,243,234,0.26) 50%, rgba(223,243,234,0.04) 70%, rgba(223,243,234,0) 100%)",
-              filter: "blur(1.6px)",
-            }}
-          />
-          <div
-            ref={vGlowRef}
-            style={{
-              position: "absolute",
-              top: "10%",
-              left: "50%",
-              transform: "translateX(-50%)",
-              width: `${BOX_GAP_PX}px`,
-              height: "80%",
-              background:
-                "linear-gradient(to bottom, rgba(223,243,234,0) 0%, rgba(223,243,234,0.04) 30%, rgba(223,243,234,0.26) 50%, rgba(223,243,234,0.04) 70%, rgba(223,243,234,0) 100%)",
-              filter: "blur(1.6px)",
-            }}
-          />
-          <div
-            style={{
-              position: "absolute",
-              left: "50%",
-              top: "50%",
-              transform: "translate(-50%, -50%)",
-              width: `${BOX_GAP_PX}px`,
-              height: `${BOX_GAP_PX}px`,
-              background: "rgba(223,243,234,0.2)",
-              filter: "blur(1.8px)",
+                  "radial-gradient(circle, rgba(158,255,214,0.5) 0%, rgba(158,255,214,0.26) 30%, rgba(158,255,214,0.15) 52%, rgba(158,255,214,0.09) 68%, rgba(158,255,214,0.05) 80%, rgba(158,255,214,0.02) 90%, rgba(158,255,214,0.008) 96%, rgba(158,255,214,0) 100%)",
+                filter: "blur(3.8px)",
             }}
           />
         </div>
