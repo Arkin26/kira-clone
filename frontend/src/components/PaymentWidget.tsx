@@ -99,6 +99,17 @@ function SuccessCelebration({
   onDismiss: () => void;
   mode?: "full" | "compact";
 }) {
+  const particles = useMemo(
+    () =>
+      Array.from({ length: 10 }, (_, i) => ({
+        id: i,
+        x: (Math.random() - 0.5) * 120,
+        y: (Math.random() - 0.5) * 120,
+        delay: i * 0.04,
+      })),
+    [],
+  );
+
   if (mode === "compact") {
     return (
       <motion.div
@@ -133,17 +144,6 @@ function SuccessCelebration({
       </motion.div>
     );
   }
-
-  const particles = useMemo(
-    () =>
-      Array.from({ length: 10 }, (_, i) => ({
-        id: i,
-        x: (Math.random() - 0.5) * 120,
-        y: (Math.random() - 0.5) * 120,
-        delay: i * 0.04,
-      })),
-    [],
-  );
 
   return (
     <motion.div
