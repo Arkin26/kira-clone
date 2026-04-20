@@ -61,16 +61,44 @@ function CopyIntentId({ id }: { id: string }) {
   );
 }
 
+function normalizeAddr(a: string): string {
+  const t = a.trim();
+  if (t.startsWith("0x")) return t.toLowerCase();
+  return t;
+}
+
+function rowDirection(
+  row: SerializedPaymentIntent,
+  wallets: string[],
+): "Received" | "Sent" | "Both" | "—" {
+  if (wallets.length === 0) return "—";
+  const wset = new Set(wallets.map(normalizeAddr));
+  const t = normalizeAddr(row.treasuryAddress);
+  const p = row.payerAddress ? normalizeAddr(row.payerAddress) : null;
+  const recv = wset.has(t);
+  const sent = p != null && wset.has(p);
+  if (sent && recv) return "Both";
+  if (recv) return "Received";
+  if (sent) return "Sent";
+  return "—";
+}
+
 function AmountCell({ row }: { row: SerializedPaymentIntent }) {
+  const src =
+    row.assetKind === "SPL_TOKEN"
+      ? row.currency
+      : row.assetKind === "NATIVE_SOL"
+        ? "SOL"
+        : row.assetKind === "EVM_NATIVE"
+          ? "ETH"
+          : row.currency;
   return (
-    <div className="flex items-center gap-2">
+    <div className="flex flex-wrap items-center gap-2">
       <span className="rounded-md border border-white/[0.08] bg-white/[0.04] px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-[#84A794]">
-        SOL
+        {row.chainId}
       </span>
-      <span className="font-mulish tabular-nums text-sm text-white/90">{row.amount}</span>
-      <span className="text-white/25">→</span>
-      <span className="rounded-md border border-[#B2C8BC]/20 bg-[#B2C8BC]/5 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-[#B2C8BC]">
-        USDC
+      <span className="font-mulish tabular-nums text-sm text-white/90">
+        {row.amount} {src}
       </span>
     </div>
   );
@@ -78,9 +106,10 @@ function AmountCell({ row }: { row: SerializedPaymentIntent }) {
 
 type Props = {
   rows: SerializedPaymentIntent[];
+  viewerAddresses?: string[];
 };
 
-export function TransactionTable({ rows }: Props) {
+export function TransactionTable({ rows, viewerAddresses = [] }: Props) {
   if (rows.length === 0) {
     return (
       <div className="px-5 py-12 text-center text-sm text-white/40">
@@ -91,12 +120,15 @@ export function TransactionTable({ rows }: Props) {
 
   return (
     <div className="overflow-x-auto">
-      <table className="w-full min-w-[860px] border-collapse text-left text-sm">
+      <table className="w-full min-w-[960px] border-collapse text-left text-sm">
         <thead>
           <tr className="border-b border-white/[0.08] text-xs font-medium uppercase tracking-wider text-white/40">
             <th className="px-4 py-3 sm:px-5">Intent</th>
             <th className="px-4 py-3 sm:px-5">Amount</th>
             <th className="px-4 py-3 sm:px-5">Status</th>
+            {viewerAddresses.length > 0 ? (
+              <th className="px-4 py-3 sm:px-5">Flow</th>
+            ) : null}
             <th className="px-4 py-3 sm:px-5">Time</th>
             <th className="px-4 py-3 sm:px-5">Explorer</th>
           </tr>
@@ -113,6 +145,11 @@ export function TransactionTable({ rows }: Props) {
               <td className="px-4 py-3.5 sm:px-5">
                 <StatusBadge status={row.status} />
               </td>
+              {viewerAddresses.length > 0 ? (
+                <td className="whitespace-nowrap px-4 py-3.5 text-xs text-white/70 sm:px-5">
+                  {rowDirection(row, viewerAddresses)}
+                </td>
+              ) : null}
               <td className="whitespace-nowrap px-4 py-3.5 text-white/55 sm:px-5">
                 {formatIntentTimestamp(row.createdAt)}
               </td>

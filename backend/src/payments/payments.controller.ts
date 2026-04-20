@@ -1,5 +1,6 @@
 import { Body, Controller, Get, Post, Query, UseGuards } from '@nestjs/common';
 import { ThrottlerGuard } from '@nestjs/throttler';
+import { ApiKeyGuard } from '../common/guards/api-key.guard';
 import { CreatePaymentIntentDto } from './dto/create-payment-intent.dto';
 import { VerifyPaymentDto } from './dto/verify-payment.dto';
 import type { PaymentMetricsDto } from './payments.types';
@@ -11,16 +12,24 @@ export class PaymentsController {
   constructor(private readonly paymentsService: PaymentsService) {}
 
   @Get('metrics')
-  async getMetrics(): Promise<PaymentMetricsDto> {
-    return this.paymentsService.getPaymentMetrics();
+  async getMetrics(
+    @Query('recipient') recipient?: string,
+    @Query('involved') involved?: string,
+  ): Promise<PaymentMetricsDto> {
+    return this.paymentsService.getPaymentMetrics(recipient, involved);
   }
 
   @Get()
-  async list(@Query('q') q?: string): Promise<SerializedPaymentIntent[]> {
-    return this.paymentsService.listPayments(q);
+  async list(
+    @Query('q') q?: string,
+    @Query('recipient') recipient?: string,
+    @Query('involved') involved?: string,
+  ): Promise<SerializedPaymentIntent[]> {
+    return this.paymentsService.listPayments(q, recipient, involved);
   }
 
   @Post('intent')
+  @UseGuards(ApiKeyGuard)
   async createIntent(@Body() dto: CreatePaymentIntentDto): Promise<SerializedPaymentIntent> {
     const intent = await this.paymentsService.createIntent(dto);
     return this.paymentsService.serializeIntent(intent);

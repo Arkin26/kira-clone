@@ -1,109 +1,78 @@
 # K-INTENT
 
-K-INTENT is a non-custodial, intent-based payment gateway built on Solana.
-
-The core idea is simple: instead of trusting a backend to move funds, the backend only records payment intent state and verifies what happened on-chain. The user signs the transaction in their own wallet, and K-INTENT confirms the transaction before marking payment success.
+K-INTENT is a non-custodial, intent-based payment gateway. The backend records **payment intents** and **verifies** what happened on-chain (Solana today, optional EVM on Sepolia). Merchants receive funds at a configured **treasury** address; the server never holds user keys.
 
 ## What the project does
 
-K-INTENT provides two main experiences:
+- **Checkout:** Create an intent, pay (native SOL or allowlisted SPL such as devnet USDC), then verify.
+- **Dashboard:** Volume by asset class, transaction feed, CSV export.
+- **Webhooks:** Optional HMAC-signed `POST` to a merchant URL on `SUCCESS` / `FAILED` (see [backend/docs/WEBHOOKS.md](backend/docs/WEBHOOKS.md)).
 
-- A checkout flow where a payer enters an amount, signs a SOL transfer, and receives payment confirmation.
-- A merchant dashboard where operators track volume, payment statuses, transaction history, and export reports.
+## Threat model (what we verify)
 
-The platform is designed for portfolio-quality UX (glassmorphism UI, responsive layouts, polished loading and success states) while keeping backend logic explicit and auditable.
+| Trust boundary | Behavior |
+|----------------|----------|
+| Client amount | **Not trusted.** Settlement is validated against chain state and the intent row. |
+| Solana native SOL | **Treasury inbound** lamports must increase by at least the intent amount; `TREASURY_PUBLIC_KEY` must match the merchant treasury used at intent creation. |
+| Solana SPL | **Treasury** token account (owner = treasury wallet) must gain at least the expected raw amount for the allowlisted mint; decimals come from `MerchantAssetAllowlist`. |
+| EVM (Sepolia) | `EVM_RPC_URL` + `EVM_TREASURY_ADDRESS`; native ETH checks `tx.to` and `value`; ERC-20 checks `Transfer` logs to the treasury for allowlisted contracts. |
+| Replay | Unique `signature` on success; idempotent verify for the same `(intentId, signature)`. |
 
-## Core logic used in K-INTENT
+**Not covered in this repo:** bridge aggregation, compliance/KYC, MEV guarantees, or automatic webhook retries (see webhooks doc).
 
-### 1) Intent-first payment model
+## API contract
 
-Before any on-chain transfer, the frontend asks the backend to create a `PaymentIntent` with status `PENDING`.
+OpenAPI description: [backend/openapi.yaml](backend/openapi.yaml).
 
-This gives the system:
+## Local run
 
-- A stable intent ID for later verification.
-- A server-side record for analytics and reconciliation.
-- A state machine for payment lifecycle (`PENDING` -> `SUCCESS` or `FAILED`).
+1. **Database:** Apply schema ([backend/prisma/supabase-manual-ddl.sql](backend/prisma/supabase-manual-ddl.sql) in Supabase SQL editor, or `prisma db push` against Postgres) and set `DATABASE_URL` in `backend/.env`.
+2. **Seed allowlist (optional):** `cd backend && npx prisma generate && npm run prisma:seed`
+3. **Backend env:** See [backend/.env.example](backend/.env.example) — at minimum `DATABASE_URL`, `TREASURY_PUBLIC_KEY` (must match `NEXT_PUBLIC_MERCHANT_WALLET` on the frontend), `RPC_URL`.
+4. **Frontend env:** `frontend/.env.local` — `NEXT_PUBLIC_API_URL`, `NEXT_PUBLIC_MERCHANT_WALLET` (default recipient in checkout UI), `NEXT_PUBLIC_MERCHANT_ID`; if the backend sets `API_KEY`, set `NEXT_PUBLIC_API_KEY` to match.
 
-### 2) Non-custodial signing
+**Pay any address:** Checkout includes a **recipient** field; intents store that treasury on-chain verification uses it. **`TREASURY_PUBLIC_KEY`** is only required when the client **omits** `treasuryAddress` on create intent.
 
-The frontend uses Solana Wallet Adapter to request signing/sending from the payer wallet.
+**Per-recipient dashboard:** Open `/dashboard?recipient=<solana_address>` (or `0x…` for EVM) to filter metrics and the feed; leave empty to see all intents.
+5. Run backend: `cd backend && npm install && npm run start:dev`
+6. Run frontend: `cd frontend && npm install && npm run dev`
 
-- Private keys never touch the backend.
-- The backend cannot create or sign user transactions.
-- The wallet returns a transaction signature used for verification.
+Landing: `http://localhost:3001/` · Dashboard: `http://localhost:3001/dashboard`
 
-### 3) Backend verification pipeline
+## Demo recording checklist
 
-When the frontend sends `{ intentId, signature }` to `POST /payments/verify`, backend logic:
+Use this when capturing a short portfolio video (2–3 minutes):
 
-1. Finds the intent by ID.
-2. Enforces idempotency rules (signature cannot be reused across intents).
-3. Waits for on-chain finalization (`finalized` commitment).
-4. Fetches parsed transaction data from Solana RPC.
-5. Checks transaction outcome and amount match against the intent.
-6. Updates DB status to `SUCCESS` (or `FAILED` when verification fails).
+1. Show `TREASURY_PUBLIC_KEY` / `NEXT_PUBLIC_MERCHANT_WALLET` alignment (same treasury).
+2. Create a **SOL** intent, pay in Phantom (or Solflare), show success and Solscan link.
+3. **Optional:** Switch to **USDC**, show devnet USDC in wallet (or explain faucet), complete flow.
+4. Open **Dashboard** and show metrics + row in the feed.
+5. (Optional) Trigger a webhook using a test URL (e.g. webhook.site) and show `X-K-Intent-Signature`.
 
-This separates UI optimism from final truth: success is only recorded after chain verification.
+## Architecture (high level)
 
-### 4) Security controls
+```mermaid
+flowchart LR
+  subgraph client [Client]
+    Wallet[Wallet]
+    Widget[Checkout]
+  end
+  subgraph api [NestJS]
+    Pay[PaymentsService]
+    Sol[SolanaSettlementService]
+    Evm[EvmSettlementService]
+    Web[WebhooksService]
+  end
+  DB[(Postgres)]
+  Wallet --> Widget
+  Widget --> Pay
+  Pay --> DB
+  Pay --> Sol
+  Pay --> Evm
+  Pay --> Web
+```
 
-- DTO validation with global `ValidationPipe`.
-- Amount validation (`amount > 0`) in both DTO and service guard logic.
-- Rate limiting on `POST /payments/verify` (5 requests/minute per IP) to reduce RPC abuse.
-- Unique transaction signature constraints to prevent replay/duplicate settlement.
+## Repository layout
 
-## What happens in the backend (NestJS + Prisma)
-
-The backend is organized around a `Payments` module and Prisma data access:
-
-- `POST /payments/intent`: creates a pending intent row.
-- `POST /payments/verify`: rate-limited verification endpoint.
-- `GET /payments`: returns transaction feed (supports search).
-- `GET /payments/metrics`: returns dashboard aggregates (e.g., total successful volume).
-
-Database model highlights:
-
-- `PaymentIntent` stores merchant ID, amount, currency, status, optional signature, timestamps.
-- Aggregations for dashboard metrics are computed directly from persisted intent states.
-- Prisma handles typed DB access; Supabase/Postgres acts as source of record.
-
-## Frontend + dashboard behavior
-
-The frontend (Next.js 14) coordinates user flows with React Query:
-
-- Checkout calls intent -> wallet send -> verify.
-- Dashboard polls/fetches metrics and transactions.
-- Search, manual refresh, skeleton loading, and CSV export support merchant operations.
-
-Statuses are rendered with clear UI semantics:
-
-- `SUCCESS` (green/glow badge)
-- `PENDING` (muted neutral)
-- `FAILED` (red)
-
-Each verified signature can be opened in Solscan for external auditability.
-
-## Local run (quick)
-
-1. Configure backend env in `backend/.env` (`DATABASE_URL`, `RPC_URL`).
-2. Configure frontend env in `frontend/.env.local` (`NEXT_PUBLIC_*` variables).
-3. Run backend:
-   ```bash
-   cd backend
-   npm install
-   npm run prisma:generate
-   npm run start:dev
-   ```
-4. Run frontend:
-   ```bash
-   cd frontend
-   npm install
-   npm run dev
-   ```
-
-App routes:
-
-- Landing/checkout: `http://localhost:3001/`
-- Merchant dashboard: `http://localhost:3001/dashboard`
-# kira-clone
+- `backend/` — NestJS, Prisma, Solana + EVM verifiers, webhooks.
+- `frontend/` — Next.js 14, Solana Wallet Adapter, checkout + dashboard.

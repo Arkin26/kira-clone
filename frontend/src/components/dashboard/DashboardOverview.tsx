@@ -2,24 +2,32 @@
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { RefreshCw, TrendingUp } from "lucide-react";
+import { useSearchParams } from "next/navigation";
 
 import { fetchPaymentMetrics } from "@/lib/api";
+import { useInvolvedWalletAddresses } from "@/hooks/useInvolvedWalletAddresses";
 
 import { PlanStatusCard } from "./PlanStatusCard";
+import { RecipientFilter } from "./RecipientFilter";
 import { StatCard } from "./StatCard";
 import { TransactionFeedPanel, useDebouncedSearch } from "./TransactionFeedPanel";
 
 export function DashboardOverview() {
   const queryClient = useQueryClient();
+  const searchParams = useSearchParams();
+  const recipient = searchParams.get("recipient")?.trim() || undefined;
   const { debounced, searchBar } = useDebouncedSearch();
+  const involvedWallets = useInvolvedWalletAddresses();
+  const involvedParam =
+    involvedWallets.length > 0 ? involvedWallets.join(",") : undefined;
 
   const {
     data: metrics,
     isLoading: metricsLoading,
     isFetching: metricsFetching,
   } = useQuery({
-    queryKey: ["payment-metrics"],
-    queryFn: fetchPaymentMetrics,
+    queryKey: ["payment-metrics", recipient ?? "", involvedParam ?? ""],
+    queryFn: () => fetchPaymentMetrics(recipient, involvedParam),
   });
 
   const refreshing = metricsFetching;
@@ -31,14 +39,24 @@ export function DashboardOverview() {
 
   const volumeDisplay = metricsLoading
     ? "…"
-    : `${formatSol(metrics?.totalVolumeSol ?? "0")} SOL`;
+    : [
+        `${formatSol(metrics?.totalVolumeSol ?? "0")} SOL`,
+        `${formatSol(metrics?.totalVolumeSpl ?? "0")} SPL`,
+        `${formatSol(metrics?.totalVolumeEth ?? "0")} ETH`,
+      ].join(" · ");
 
   return (
     <div className="space-y-8">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="font-mulish text-2xl font-semibold tracking-tight text-white">Overview</h1>
-          <p className="mt-1 text-sm text-white/45">Real-time volume and settlement activity</p>
+          <p className="mt-1 text-sm text-white/45">
+            {recipient
+              ? `Scoped to treasury ${recipient.slice(0, 6)}…${recipient.slice(-4)}`
+              : involvedParam
+                ? "Payments where your connected wallets are the payer or recipient (send or receive)."
+                : "Real-time volume and settlement activity (all recipients)"}
+          </p>
         </div>
         <button
           type="button"
@@ -64,9 +82,16 @@ export function DashboardOverview() {
         <PlanStatusCard metrics={metrics} />
       </div>
 
+      <RecipientFilter />
+
       <div className="max-w-xl">{searchBar}</div>
 
-      <TransactionFeedPanel searchQuery={debounced} />
+      <TransactionFeedPanel
+        searchQuery={debounced}
+        recipient={recipient}
+        involved={involvedParam}
+        viewerAddresses={involvedWallets}
+      />
     </div>
   );
 }

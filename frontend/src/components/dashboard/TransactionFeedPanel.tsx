@@ -13,13 +13,24 @@ import { TransactionTable } from "./TransactionTable";
 type Props = {
   /** Debounced search sent to API */
   searchQuery: string;
+  /** Filter by intent treasury (Solana / EVM) */
+  recipient?: string;
+  /** Comma-separated wallets: match payer or treasury */
+  involved?: string;
+  /** For direction column (sent vs received) */
+  viewerAddresses?: string[];
 };
 
-export function TransactionFeedPanel({ searchQuery }: Props) {
+export function TransactionFeedPanel({
+  searchQuery,
+  recipient,
+  involved,
+  viewerAddresses,
+}: Props) {
   const queryClient = useQueryClient();
   const { data, isLoading, isFetching, error, refetch } = useQuery({
-    queryKey: ["payments", searchQuery],
-    queryFn: () => fetchPayments(searchQuery || undefined),
+    queryKey: ["payments", searchQuery, recipient ?? "", involved ?? ""],
+    queryFn: () => fetchPayments(searchQuery || undefined, recipient, involved),
   });
 
   const rows = data ?? [];
@@ -59,7 +70,7 @@ export function TransactionFeedPanel({ searchQuery }: Props) {
       ) : isLoading ? (
         <TableSkeleton />
       ) : (
-        <TransactionTable rows={rows} />
+        <TransactionTable rows={rows} viewerAddresses={viewerAddresses} />
       )}
     </div>
   );

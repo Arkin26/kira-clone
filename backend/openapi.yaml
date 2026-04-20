@@ -1,0 +1,184 @@
+openapi: 3.0.3
+info:
+  title: K-INTENT Payments API
+  version: 0.1.0
+  description: |
+    Intent-based crypto checkout: create an intent, pay on-chain, verify settlement.
+servers:
+  - url: http://localhost:3000
+    description: Local backend
+paths:
+  /payments/metrics:
+    get:
+      summary: Dashboard aggregates
+      parameters:
+        - name: recipient
+          in: query
+          schema:
+            type: string
+          description: Filter by treasury address (Solana base58 or EVM 0x)
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaymentMetricsDto"
+  /payments:
+    get:
+      summary: List recent payment intents
+      parameters:
+        - name: q
+          in: query
+          schema:
+            type: string
+          description: Filter by intent id or signature substring
+        - name: recipient
+          in: query
+          schema:
+            type: string
+          description: Filter by treasury address (exact match after normalization)
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/SerializedPaymentIntent"
+  /payments/intent:
+    post:
+      summary: Create payment intent
+      description: |
+        Requires `X-API-Key` when the server has `API_KEY` set.
+      security:
+        - ApiKey: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreatePaymentIntentDto"
+      responses:
+        "200":
+          description: Created intent
+        "400":
+          description: Validation error
+        "401":
+          description: Missing or invalid API key
+  /payments/verify:
+    post:
+      summary: Verify on-chain settlement
+      description: Rate limited (5 req/min per IP by default).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VerifyPaymentDto"
+      responses:
+        "200":
+          description: Updated intent
+        "400":
+          description: Invalid state or signature clash
+        "404":
+          description: Intent not found
+        "408":
+          description: Solana finalization timeout
+        "503":
+          description: RPC unavailable
+components:
+  securitySchemes:
+    ApiKey:
+      type: apiKey
+      in: header
+      name: X-API-Key
+  schemas:
+    AssetKind:
+      type: string
+      enum:
+        - NATIVE_SOL
+        - SPL_TOKEN
+        - EVM_NATIVE
+        - EVM_ERC20
+    CreatePaymentIntentDto:
+      type: object
+      required: [merchantId, amount]
+      properties:
+        merchantId:
+          type: string
+        amount:
+          type: number
+          format: float
+          description: Human amount (SOL, USDC, ETH, etc. depending on asset)
+        chainId:
+          type: string
+          example: solana:devnet
+        assetKind:
+          $ref: "#/components/schemas/AssetKind"
+        mintAddress:
+          type: string
+          description: Required for SPL_TOKEN and EVM_ERC20; must be allowlisted.
+        treasuryAddress:
+          type: string
+          description: Recipient of funds; defaults from server env if omitted.
+    VerifyPaymentDto:
+      type: object
+      required: [signature, intentId]
+      properties:
+        signature:
+          type: string
+          description: Solana tx signature or 0x EVM tx hash
+        intentId:
+          type: string
+          format: uuid
+    SerializedPaymentIntent:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        merchantId:
+          type: string
+        amount:
+          type: string
+        currency:
+          type: string
+        status:
+          type: string
+          enum: [PENDING, SUCCESS, FAILED]
+        signature:
+          type: string
+          nullable: true
+        chainId:
+          type: string
+        assetKind:
+          $ref: "#/components/schemas/AssetKind"
+        mintAddress:
+          type: string
+          nullable: true
+        treasuryAddress:
+          type: string
+        evmChainId:
+          type: integer
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    PaymentMetricsDto:
+      type: object
+      properties:
+        totalVolumeSol:
+          type: string
+        totalVolumeSpl:
+          type: string
+        totalVolumeEth:
+          type: string
+        successCount:
+          type: integer
+        totalCount:
+          type: integer

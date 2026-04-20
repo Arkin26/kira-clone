@@ -13,16 +13,56 @@ enum PaymentIntentStatus {
   FAILED
 }
 
-model PaymentIntent {
-  id         String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+enum AssetKind {
+  NATIVE_SOL
+  SPL_TOKEN
+  EVM_NATIVE
+  EVM_ERC20
+}
+
+model Merchant {
+  id              String                   @id
+  webhookUrl      String?
+  webhookSecret   String?
+  /// When set, this merchant row is bound to a Privy user (dashboard / auth).
+  privyUserId     String?                  @unique
+  createdAt       DateTime                 @default(now())
+  updatedAt       DateTime                 @updatedAt
+  assetAllowlists MerchantAssetAllowlist[]
+}
+
+model MerchantAssetAllowlist {
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   merchantId String
-  amount     Decimal              @db.Decimal(20, 9)
-  currency   String               @default("SOL")
-  status     PaymentIntentStatus  @default(PENDING)
-  signature  String?              @unique
-  createdAt  DateTime             @default(now())
-  updatedAt  DateTime             @updatedAt
+  chainId    String
+  mint       String
+  decimals   Int
+  symbol     String?
+  Merchant   Merchant @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+
+  @@unique([merchantId, chainId, mint])
+  @@index([merchantId])
+}
+
+model PaymentIntent {
+  id                String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  merchantId        String
+  amount            Decimal              @db.Decimal(20, 9)
+  currency          String               @default("SOL")
+  status            PaymentIntentStatus  @default(PENDING)
+  signature         String?              @unique
+  chainId           String               @default("solana:devnet")
+  assetKind         AssetKind            @default(NATIVE_SOL)
+  mintAddress       String?
+  treasuryAddress   String
+  /// Fee payer / `tx.from` when verified (Solana base58 or EVM lowercase 0x).
+  payerAddress      String?
+  evmChainId        Int?
+  createdAt         DateTime             @default(now())
+  updatedAt         DateTime             @updatedAt
 
   @@index([merchantId])
+  @@index([payerAddress])
   @@index([status])
+  @@index([chainId])
 }

@@ -3,6 +3,8 @@
 import dynamic from "next/dynamic";
 import type { CSSProperties } from "react";
 import { useLayoutEffect, useRef, useState } from "react";
+import { FaqSection } from "./FaqSection";
+import { IntegrationShopSection } from "./IntegrationShopSection";
 import { TokenSection } from "./TokenSection";
 import { ValuesSection } from "./ValuesSection";
 import { SOLANA_TOKEN_DECOR_SIZE_CSS, VALUES_SOLANA_ACCENT } from "./SolanaToken3D";
@@ -39,6 +41,8 @@ export function ValuesTokenSectionsGroup() {
       <div className="relative z-0" style={{ position: "relative", zIndex: 0 }}>
         <ValuesSection ref={valuesSectionRef} />
         <TokenSection />
+        <IntegrationShopSection />
+        <FaqSection />
       </div>
 
       {seamY !== null ? (

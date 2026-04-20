@@ -7,49 +7,148 @@ import {
   ServiceUnavailableException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { PaymentIntent, PaymentIntentStatus, Prisma } from '@prisma/client';
-import { Decimal } from '@prisma/client/runtime/library';
-import { Connection, LAMPORTS_PER_SOL, ParsedTransactionWithMeta } from '@solana/web3.js';
+import { AssetKind, PaymentIntent, PaymentIntentStatus, Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { EvmSettlementService } from '../evm/evm-settlement.service';
+import { SolanaSettlementService } from '../solana/solana-settlement.service';
+import { WebhooksService } from '../webhooks/webhooks.service';
 import { CreatePaymentIntentDto } from './dto/create-payment-intent.dto';
 import type { PaymentMetricsDto } from './payments.types';
 import { SerializedPaymentIntent } from './payments.types';
+import { normalizeRecipientFilter, normalizeTreasuryAddress } from './treasury-address.util';
 
-const FINALIZE_POLL_MS = 2000;
 const FINALIZE_TIMEOUT_MS = 60_000;
-const RPC_MAX_ATTEMPTS = 4;
-const RPC_BASE_DELAY_MS = 400;
+
+function parseEip155ChainId(chainId: string): number {
+  const m = /^eip155:(\d+)$/.exec(chainId.trim());
+  if (!m) {
+    throw new BadRequestException(`Invalid EIP-155 chainId: ${chainId}`);
+  }
+  return parseInt(m[1], 10);
+}
 
 @Injectable()
 export class PaymentsService {
   private readonly logger = new Logger(PaymentsService.name);
-  private readonly connection: Connection;
 
   constructor(
     private readonly prisma: PrismaService,
     private readonly config: ConfigService,
-  ) {
-    const rpcUrl = this.config.get<string>('RPC_URL') ?? 'https://api.devnet.solana.com';
-    this.logger.log(`Solana blockchain client targeting: ${rpcUrl} (commitment: finalized)`);
-    this.connection = new Connection(rpcUrl, { commitment: 'finalized' });
-  }
+    private readonly solana: SolanaSettlementService,
+    private readonly evm: EvmSettlementService,
+    private readonly webhooks: WebhooksService,
+  ) {}
 
-  /**
-   * Persists a new payment intent in `PENDING` state.
-   */
   async createIntent(dto: CreatePaymentIntentDto): Promise<PaymentIntent> {
     this.assertPositiveFiniteAmount(dto.amount);
+
+    await this.prisma.merchant.upsert({
+      where: { id: dto.merchantId },
+      create: { id: dto.merchantId },
+      update: {},
+    });
+
+    const chainId = dto.chainId?.trim() || 'solana:devnet';
+    let assetKind = dto.assetKind;
+    if (assetKind == null) {
+      assetKind = chainId.startsWith('eip155:') ? AssetKind.EVM_NATIVE : AssetKind.NATIVE_SOL;
+    }
+
+    let treasuryAddress: string;
+    let evmChainId: number | null = null;
+    const mintAddress = dto.mintAddress?.trim() ?? null;
+    let currency: string;
+
+    if (chainId.startsWith('eip155:')) {
+      const explicitEvm = dto.treasuryAddress?.trim();
+      if (explicitEvm) {
+        treasuryAddress = normalizeTreasuryAddress(chainId, explicitEvm);
+      } else {
+        const evmTreasury = this.config.get<string>('EVM_TREASURY_ADDRESS')?.trim();
+        if (!evmTreasury) {
+          throw new BadRequestException(
+            'Provide treasuryAddress in the request or configure EVM_TREASURY_ADDRESS on the server',
+          );
+        }
+        treasuryAddress = normalizeTreasuryAddress(chainId, evmTreasury);
+      }
+      evmChainId = parseEip155ChainId(chainId);
+
+      if (assetKind === AssetKind.EVM_ERC20) {
+        if (!mintAddress) {
+          throw new BadRequestException('mintAddress is required for EVM_ERC20');
+        }
+        const row = await this.prisma.merchantAssetAllowlist.findUnique({
+          where: {
+            merchantId_chainId_mint: {
+              merchantId: dto.merchantId,
+              chainId,
+              mint: mintAddress.toLowerCase(),
+            },
+          },
+        });
+        if (!row) {
+          throw new BadRequestException('Token is not allowlisted for this merchant and chain');
+        }
+        currency = row.symbol ?? 'ERC20';
+      } else if (assetKind === AssetKind.EVM_NATIVE) {
+        currency = 'ETH';
+      } else {
+        throw new BadRequestException('EVM intents require assetKind EVM_NATIVE or EVM_ERC20');
+      }
+    } else {
+      const explicitSol = dto.treasuryAddress?.trim();
+      if (explicitSol) {
+        treasuryAddress = normalizeTreasuryAddress(chainId, explicitSol);
+      } else {
+        const solTreasury = this.config.get<string>('TREASURY_PUBLIC_KEY')?.trim();
+        if (!solTreasury) {
+          throw new BadRequestException(
+            'Provide treasuryAddress in the request or configure TREASURY_PUBLIC_KEY on the server',
+          );
+        }
+        treasuryAddress = normalizeTreasuryAddress(chainId, solTreasury);
+      }
+
+      if (assetKind === AssetKind.SPL_TOKEN) {
+        if (!mintAddress) {
+          throw new BadRequestException('mintAddress is required for SPL_TOKEN');
+        }
+        const row = await this.prisma.merchantAssetAllowlist.findUnique({
+          where: {
+            merchantId_chainId_mint: {
+              merchantId: dto.merchantId,
+              chainId,
+              mint: mintAddress,
+            },
+          },
+        });
+        if (!row) {
+          throw new BadRequestException('Mint is not allowlisted for this merchant and chain');
+        }
+        currency = row.symbol ?? 'SPL';
+      } else if (assetKind === AssetKind.NATIVE_SOL) {
+        currency = 'SOL';
+      } else {
+        throw new BadRequestException('Solana intents require assetKind NATIVE_SOL or SPL_TOKEN');
+      }
+    }
+
     return this.prisma.paymentIntent.create({
       data: {
         merchantId: dto.merchantId,
         amount: new Prisma.Decimal(dto.amount),
-        currency: 'SOL',
+        currency,
         status: PaymentIntentStatus.PENDING,
+        chainId,
+        assetKind,
+        mintAddress,
+        treasuryAddress,
+        evmChainId,
       },
     });
   }
 
-  /** Defense in depth with DTO validation — rejects non-finite and non-positive amounts. */
   private assertPositiveFiniteAmount(amount: number): void {
     if (typeof amount !== 'number' || !Number.isFinite(amount) || amount <= 0) {
       throw new BadRequestException('Amount must be a finite number greater than zero');
@@ -64,10 +163,61 @@ export class PaymentsService {
   }
 
   /**
-   * Lists recent payment intents, optionally filtered by intent id or signature substring (case-insensitive).
+   * Dashboard / feed: optional treasury filter plus optional "involved" wallets
+   * (matches either `treasuryAddress` or `payerAddress` for each address).
    */
-  async listPayments(search?: string): Promise<SerializedPaymentIntent[]> {
+  private buildListWhere(
+    recipientRaw?: string,
+    involvedRaw?: string,
+  ): Prisma.PaymentIntentWhereInput | undefined {
+    const recipientNorm =
+      recipientRaw != null && recipientRaw.trim() !== ''
+        ? normalizeRecipientFilter(recipientRaw)
+        : undefined;
+
+    const involvedParts =
+      involvedRaw != null && involvedRaw.trim() !== ''
+        ? involvedRaw
+            .split(',')
+            .map((s) => s.trim())
+            .filter(Boolean)
+        : [];
+
+    const involvedNorm =
+      involvedParts.length > 0
+        ? involvedParts.map((p) => normalizeRecipientFilter(p))
+        : undefined;
+
+    const clauses: Prisma.PaymentIntentWhereInput[] = [];
+
+    if (recipientNorm) {
+      clauses.push({ treasuryAddress: recipientNorm });
+    }
+
+    if (involvedNorm && involvedNorm.length > 0) {
+      clauses.push({
+        OR: involvedNorm.flatMap((w) => [{ treasuryAddress: w }, { payerAddress: w }]),
+      });
+    }
+
+    if (clauses.length === 0) {
+      return undefined;
+    }
+    if (clauses.length === 1) {
+      return clauses[0];
+    }
+    return { AND: clauses };
+  }
+
+  async listPayments(
+    search?: string,
+    recipientRaw?: string,
+    involvedRaw?: string,
+  ): Promise<SerializedPaymentIntent[]> {
+    const where = this.buildListWhere(recipientRaw, involvedRaw);
+
     const rows = await this.prisma.paymentIntent.findMany({
+      where,
       orderBy: { createdAt: 'desc' },
       take: 1000,
     });
@@ -83,32 +233,54 @@ export class PaymentsService {
     );
   }
 
-  /**
-   * Sum of amounts for SUCCESS intents and row counts for dashboard metrics.
-   */
-  async getPaymentMetrics(): Promise<PaymentMetricsDto> {
-    const [agg, totalCount] = await Promise.all([
+  async getPaymentMetrics(recipientRaw?: string, involvedRaw?: string): Promise<PaymentMetricsDto> {
+    const scope = this.buildListWhere(recipientRaw, involvedRaw) ?? {};
+
+    const [solAgg, splAgg, ethAgg, totalCount, successCount] = await Promise.all([
       this.prisma.paymentIntent.aggregate({
-        where: { status: PaymentIntentStatus.SUCCESS },
+        where: {
+          status: PaymentIntentStatus.SUCCESS,
+          assetKind: AssetKind.NATIVE_SOL,
+          ...scope,
+        },
         _sum: { amount: true },
-        _count: true,
       }),
-      this.prisma.paymentIntent.count(),
+      this.prisma.paymentIntent.aggregate({
+        where: {
+          status: PaymentIntentStatus.SUCCESS,
+          assetKind: AssetKind.SPL_TOKEN,
+          ...scope,
+        },
+        _sum: { amount: true },
+      }),
+      this.prisma.paymentIntent.aggregate({
+        where: {
+          status: PaymentIntentStatus.SUCCESS,
+          assetKind: AssetKind.EVM_NATIVE,
+          ...scope,
+        },
+        _sum: { amount: true },
+      }),
+      this.prisma.paymentIntent.count({ where: scope }),
+      this.prisma.paymentIntent.count({
+        where: { status: PaymentIntentStatus.SUCCESS, ...scope },
+      }),
     ]);
-    const sum = agg._sum.amount;
+
+    const sumStr = (d: Prisma.Decimal | null | undefined): string =>
+      d != null ? d.toString() : '0';
+
     return {
-      totalVolumeSol: sum !== null && sum !== undefined ? sum.toString() : '0',
-      successCount: agg._count,
+      totalVolumeSol: sumStr(solAgg._sum.amount),
+      totalVolumeSpl: sumStr(splAgg._sum.amount),
+      totalVolumeEth: sumStr(ethAgg._sum.amount),
+      successCount,
       totalCount,
     };
   }
 
   /**
-   * Waits until the transaction is finalized on Solana Devnet, validates execution and amount
-   * against the intent (fee-payer outbound SOL, excluding network fee), then updates the row.
-   *
-   * Idempotency: the same `(intentId, signature)` success pair can be applied once; signatures
-   * are unique on success. A signature linked to another intent is rejected.
+   * Verifies settlement on-chain (Solana or EVM) and updates the intent.
    */
   async verifyTransaction(signature: string, intentId: string): Promise<SerializedPaymentIntent> {
     const intent = await this.prisma.paymentIntent.findUnique({ where: { id: intentId } });
@@ -135,34 +307,57 @@ export class PaymentsService {
       throw new BadRequestException(`Intent cannot be verified from status ${intent.status}`);
     }
 
-    let parsed: ParsedTransactionWithMeta | null;
-    try {
-      parsed = await this.waitForFinalizedTransaction(signature);
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      this.logger.error(`Blockchain verification failed for ${signature}: ${message}`);
-      throw new ServiceUnavailableException(
-        'Unable to confirm the transaction on Solana Devnet. Retry later.',
-      );
+    let amountOk: boolean;
+    let resolvedPayer: string | null = null;
+
+    if (this.evm.isEvmIntent(intent)) {
+      try {
+        amountOk = await this.evm.verifyTransaction(signature, intent);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        this.logger.error(`EVM verification failed for ${signature}: ${message}`);
+        throw new ServiceUnavailableException(
+          'Unable to verify the transaction on the EVM RPC. Retry later.',
+        );
+      }
+      if (amountOk) {
+        resolvedPayer = await this.evm.getPayerAddressFromTxHash(signature);
+      }
+    } else {
+      let parsed;
+      try {
+        parsed = await this.solana.waitForFinalizedTransaction(signature);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        this.logger.error(`Solana verification failed for ${signature}: ${message}`);
+        throw new ServiceUnavailableException(
+          'Unable to confirm the transaction on Solana. Retry later.',
+        );
+      }
+
+      if (!parsed) {
+        this.logger.warn(
+          `Signature ${signature} not finalized within ${FINALIZE_TIMEOUT_MS}ms; intent left PENDING`,
+        );
+        throw new RequestTimeoutException(
+          'Transaction was not finalized on Solana within the allowed window. No database changes were applied.',
+        );
+      }
+
+      const chainError = parsed.meta?.err != null;
+      amountOk = !chainError && (await this.solana.verifySettlement(parsed, intent));
+      if (amountOk) {
+        resolvedPayer = this.solana.extractFeePayerAddress(parsed);
+      }
     }
 
-    if (!parsed) {
-      this.logger.warn(`Signature ${signature} not finalized within ${FINALIZE_TIMEOUT_MS}ms; intent left PENDING`);
-      throw new RequestTimeoutException(
-        'Transaction was not finalized on Solana Devnet within the allowed window. No database changes were applied.',
-      );
-    }
-
-    const chainError = parsed.meta?.err != null;
-    const amountOk = this.transactionMatchesIntentAmount(parsed, intent);
-
-    if (chainError || !amountOk) {
-      this.logger.warn(
-        `Verification rejected for ${signature}: chainError=${Boolean(chainError)} amountOk=${amountOk}`,
-      );
+    if (!amountOk) {
+      this.logger.warn(`Verification rejected for ${signature}`);
       await this.markIntentFailed(intentId);
       const failed = await this.prisma.paymentIntent.findUniqueOrThrow({ where: { id: intentId } });
-      return this.serializeIntent(failed);
+      const serializedFailed = this.serializeIntent(failed);
+      this.webhooks.notifyIntentUpdated(failed, serializedFailed);
+      return serializedFailed;
     }
 
     try {
@@ -188,12 +383,15 @@ export class PaymentsService {
           data: {
             status: PaymentIntentStatus.SUCCESS,
             signature,
+            ...(resolvedPayer ? { payerAddress: resolvedPayer } : {}),
           },
         });
       });
 
       this.logger.log(`Intent ${intentId} marked SUCCESS for signature ${signature}`);
-      return this.serializeIntent(updated);
+      const serialized = this.serializeIntent(updated);
+      this.webhooks.notifyIntentUpdated(updated, serialized);
+      return serialized;
     } catch (err) {
       if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
         throw new BadRequestException('This signature has already been processed for another intent');
@@ -209,89 +407,6 @@ export class PaymentsService {
         status: { in: [PaymentIntentStatus.PENDING, PaymentIntentStatus.FAILED] },
       },
       data: { status: PaymentIntentStatus.FAILED },
-    });
-  }
-
-  /**
-   * Phase-1 heuristic: first account (fee payer) must have sent at least the intent amount in SOL
-   * excluding the protocol fee. Production should pin a treasury `PublicKey` and parse transfers.
-   */
-  private transactionMatchesIntentAmount(
-    tx: ParsedTransactionWithMeta,
-    intent: PaymentIntent,
-  ): boolean {
-    if (intent.currency !== 'SOL') {
-      this.logger.warn(`Non-SOL currency on intent ${intent.id}; amount check skipped (treated as fail)`);
-      return false;
-    }
-    const meta = tx.meta;
-    if (!meta?.preBalances?.length || !meta.postBalances?.length) {
-      return false;
-    }
-    const payerPre = BigInt(meta.preBalances[0]);
-    const payerPost = BigInt(meta.postBalances[0]);
-    const fee = BigInt(meta.fee);
-    const outboundTransferLamports = payerPre - payerPost - fee;
-    const required = this.intentAmountToLamports(intent.amount);
-    return outboundTransferLamports >= required;
-  }
-
-  private intentAmountToLamports(amount: Prisma.Decimal): bigint {
-    const lamportsDecimal = new Decimal(amount.toString())
-      .mul(LAMPORTS_PER_SOL)
-      .toDecimalPlaces(0, Decimal.ROUND_DOWN);
-    return BigInt(lamportsDecimal.toFixed(0));
-  }
-
-  private async waitForFinalizedTransaction(signature: string): Promise<ParsedTransactionWithMeta | null> {
-    const started = Date.now();
-    this.logger.log(`Polling finalization for signature ${signature}`);
-
-    while (Date.now() - started < FINALIZE_TIMEOUT_MS) {
-      const status = await this.withRpcRetry('getSignatureStatuses', () =>
-        this.connection.getSignatureStatuses([signature], { searchTransactionHistory: true }),
-      );
-
-      const confirmationStatus = status?.value[0]?.confirmationStatus;
-      if (confirmationStatus === 'finalized') {
-        this.logger.log(`Signature ${signature} reached finalized commitment`);
-        const parsed = await this.withRpcRetry('getParsedTransaction', () =>
-          this.connection.getParsedTransaction(signature, {
-            commitment: 'finalized',
-            maxSupportedTransactionVersion: 0,
-          }),
-        );
-        return parsed;
-      }
-
-      this.logger.debug(
-        `Signature ${signature} status: ${confirmationStatus ?? 'unknown'} — waiting ${FINALIZE_POLL_MS}ms`,
-      );
-      await this.delay(FINALIZE_POLL_MS);
-    }
-
-    this.logger.warn(`Timed out waiting for finalization: ${signature}`);
-    return null;
-  }
-
-  private async withRpcRetry<T>(operation: string, fn: () => Promise<T>): Promise<T> {
-    let lastError: unknown;
-    for (let attempt = 1; attempt <= RPC_MAX_ATTEMPTS; attempt += 1) {
-      try {
-        return await fn();
-      } catch (err) {
-        lastError = err;
-        const message = err instanceof Error ? err.message : String(err);
-        this.logger.warn(`RPC ${operation} attempt ${attempt}/${RPC_MAX_ATTEMPTS} failed: ${message}`);
-        await this.delay(RPC_BASE_DELAY_MS * attempt);
-      }
-    }
-    throw lastError instanceof Error ? lastError : new Error(String(lastError));
-  }
-
-  private delay(ms: number): Promise<void> {
-    return new Promise((resolve) => {
-      setTimeout(resolve, ms);
     });
   }
 }

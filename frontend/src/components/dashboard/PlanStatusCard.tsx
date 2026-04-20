@@ -43,8 +43,8 @@ export function PlanStatusCard({
           />
         </div>
         <p className="mt-3 text-xs text-white/35">
-          {metrics?.successCount ?? 0} successful settlements · {metrics?.totalVolumeSol ?? "0"} SOL
-          volume
+          {metrics?.successCount ?? 0} successful settlements · SOL {metrics?.totalVolumeSol ?? "0"} · SPL{" "}
+          {metrics?.totalVolumeSpl ?? "0"} · ETH {metrics?.totalVolumeEth ?? "0"}
         </p>
       </div>
     </div>

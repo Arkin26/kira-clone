@@ -6,6 +6,8 @@ export type SerializedPaymentIntent = Omit<PaymentIntent, 'amount'> & { amount: 
 /** Aggregates for merchant dashboard. */
 export type PaymentMetricsDto = {
   totalVolumeSol: string;
+  totalVolumeSpl: string;
+  totalVolumeEth: string;
   successCount: number;
   totalCount: number;
 };

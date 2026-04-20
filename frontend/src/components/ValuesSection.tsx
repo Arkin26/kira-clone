@@ -4,8 +4,8 @@ import { forwardRef } from "react";
 import { motion } from "framer-motion";
 import GlassSurface from "./ui/GlassSurface";
 
-const LEFT_BLOCK_OFFSET_X = -150;
-const RIGHT_BLOCK_OFFSET_X = -30;
+const LEFT_BLOCK_OFFSET_X = -180;
+const RIGHT_BLOCK_OFFSET_X = -110;
 
 const values = [
   {
@@ -98,6 +98,7 @@ export const ValuesSection = forwardRef<HTMLElement>(function ValuesSection(_, r
         maxWidth: "100%",
         boxSizing: "border-box",
         overflowX: "hidden",
+        marginTop: "clamp(96px, 12vh, 180px)",
         padding: "80px 20vw",
         display: "flex",
         alignItems: "center",

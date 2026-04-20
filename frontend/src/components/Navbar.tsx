@@ -1,54 +1,81 @@
 "use client";
 
-import { useWalletModal } from "@solana/wallet-adapter-react-ui";
 import { AnimatePresence, motion } from "framer-motion";
+import Image from "next/image";
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+
+import { PayNowModal } from "@/components/PayNowModal";
+import { PrivyNavActions } from "@/components/privy/PrivyNavActions";
 
 const NAV_LINKS = [
-  { href: "#how-it-works", label: "How it Works" },
-  { href: "#plans", label: "Plans" },
-  { href: "#affiliate", label: "Affiliate" },
-  { href: "#support", label: "Support" },
-  { href: "#docs", label: "Docs" },
+  { href: "#footer-product", label: "Product" },
+  { href: "#footer-company", label: "Company" },
+  { href: "#footer-social", label: "Social" },
+  { href: "#footer-legal", label: "Legal" },
 ] as const;
 
-function LogoMark() {
+function BrandLogo() {
   return (
-    <div className="relative flex h-9 w-9 items-center justify-center rounded-full bg-[#0a0a0a] ring-1 ring-white/20 shadow-[0_0_18px_4px_rgba(178,200,188,0.3)]">
-      <div className="absolute inset-0 rounded-full bg-gradient-to-br from-white/15 via-white/5 to-transparent" />
-      <span className="relative font-mulish text-sm font-bold tracking-tight text-white">
-        K
+    <>
+      <Image
+        src="/icons8-magento-50.png"
+        alt=""
+        width={40}
+        height={40}
+        className="h-9 w-9 shrink-0 object-contain"
+        priority
+      />
+      <span className="font-mulish text-base font-semibold tracking-tight text-white">
+        k-intent
       </span>
-    </div>
+    </>
   );
 }
 
-function ConnectWalletButton({ className = "" }: { className?: string }) {
-  const { setVisible } = useWalletModal();
+function PayNowButton({ className = "", onClick }: { className?: string; onClick: () => void }) {
   return (
     <button
       type="button"
-      onClick={() => setVisible(true)}
+      onClick={onClick}
       className={`rounded-full bg-white px-5 py-2 text-sm font-semibold text-[#020202] shadow-[0_0_24px_rgba(255,255,255,0.18)] transition hover:bg-[#e9efeb] active:scale-[0.98] ${className}`}
     >
-      Connect Wallet
+      Pay now
     </button>
   );
 }
 
 export function Navbar() {
   const [open, setOpen] = useState(false);
+  const [payOpen, setPayOpen] = useState(false);
+  const [scrolled, setScrolled] = useState(false);
+
+  useEffect(() => {
+    const onScroll = () => setScrolled(window.scrollY > 8);
+    onScroll();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
 
   return (
     <>
-      <header className="fixed inset-x-0 top-0 z-50 bg-transparent">
-        <div className="mx-auto flex h-16 w-full max-w-[1400px] items-center justify-between gap-6 px-4 sm:px-8 md:grid md:grid-cols-[1fr_auto_1fr] md:justify-between md:gap-12 lg:px-12 xl:px-16">
-          <Link href="/" className="flex items-center gap-2.5 md:justify-self-end">
-            <LogoMark />
-            <span className="font-mulish text-base font-semibold tracking-tight text-white">
-              K-INTENT
-            </span>
+      <header
+        className={`fixed inset-x-0 z-50 transition-[top,padding-left,padding-right] duration-300 ease-out ${
+          scrolled ? "top-0" : "top-4 px-4 sm:px-6 lg:px-8"
+        }`}
+      >
+        <div
+          className={`mx-auto flex h-16 w-full items-center justify-between gap-6 px-6 transition-[max-width,border-radius,background-color,backdrop-filter,box-shadow,border-color] duration-300 ease-out sm:px-10 md:grid md:grid-cols-[1fr_auto_1fr] md:justify-between md:gap-12 md:px-14 lg:px-20 xl:px-28 2xl:px-32 ${
+            scrolled
+              ? "max-w-none rounded-none border-b border-white/[0.06] bg-[#050505]/45 shadow-[0_8px_32px_rgba(0,0,0,0.12)] backdrop-blur-xl backdrop-saturate-150 supports-[backdrop-filter]:bg-[#050505]/35"
+              : "max-w-[1600px] rounded-full border border-white/[0.08] bg-transparent shadow-none"
+          }`}
+        >
+          <Link
+            href="/"
+            className="flex -translate-x-5 items-center gap-2.5 md:justify-self-end"
+          >
+            <BrandLogo />
           </Link>
 
           <nav className="hidden items-center gap-11 md:flex md:justify-self-center">
@@ -63,20 +90,21 @@ export function Navbar() {
             ))}
           </nav>
 
-          <div className="hidden items-center gap-2 md:flex md:justify-self-start">
+          <div className="hidden translate-x-5 items-center gap-2 md:flex md:justify-self-start md:translate-x-5">
             <Link
               href="/dashboard"
               className="rounded-full border border-white/[0.08] bg-white/[0.03] px-5 py-2 text-sm font-medium text-white/85 transition hover:bg-white/[0.07] hover:text-white"
             >
               Dashboard
             </Link>
-            <ConnectWalletButton />
+            <PrivyNavActions />
+            <PayNowButton onClick={() => setPayOpen(true)} />
           </div>
 
           <button
             type="button"
             aria-label="Open menu"
-            className="flex h-10 w-10 flex-col items-center justify-center gap-1.5 rounded-xl border border-white/[0.08] bg-white/[0.03] md:hidden"
+            className="flex h-10 w-10 translate-x-5 flex-col items-center justify-center gap-1.5 rounded-xl border border-white/[0.08] bg-white/[0.03] md:hidden"
             onClick={() => setOpen(true)}
           >
             <span className="h-0.5 w-5 rounded-full bg-white/80" />
@@ -113,10 +141,7 @@ export function Navbar() {
             >
               <div className="mb-8 flex items-center justify-between">
                 <div className="flex items-center gap-2.5">
-                  <LogoMark />
-                  <span className="font-mulish font-semibold text-white">
-                    K-INTENT
-                  </span>
+                  <BrandLogo />
                 </div>
                 <button
                   type="button"
@@ -145,11 +170,22 @@ export function Navbar() {
                   </a>
                 ))}
               </nav>
-              <ConnectWalletButton className="mt-6 w-full" />
+              <div className="mt-4 flex flex-col gap-2">
+                <PrivyNavActions />
+                <PayNowButton
+                  className="w-full"
+                  onClick={() => {
+                    setOpen(false);
+                    setPayOpen(true);
+                  }}
+                />
+              </div>
             </motion.aside>
           </motion.div>
         ) : null}
       </AnimatePresence>
+
+      <PayNowModal open={payOpen} onOpenChange={setPayOpen} />
     </>
   );
 }

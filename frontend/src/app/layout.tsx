@@ -1,8 +1,7 @@
 import type { Metadata } from "next";
 import { Mulish } from "next/font/google";
 
-import { SolanaWalletProvider } from "@/components/providers/WalletProvider";
-import { QueryProvider } from "@/providers/QueryProvider";
+import { Web3Providers } from "@/components/providers/Web3Providers";
 import { Toaster } from "sonner";
 
 import "./globals.css";
@@ -28,22 +27,20 @@ export default function RootLayout({
   return (
     <html lang="en" className={mulish.variable}>
       <body className="min-h-screen bg-[#020202] font-mulish text-white antialiased">
-        <SolanaWalletProvider>
-          <QueryProvider>
-            {children}
-            <Toaster
-              theme="dark"
-              richColors
-              position="top-center"
-              toastOptions={{
-                classNames: {
-                  toast:
-                    "font-mulish border border-white/[0.1] bg-[#0a0a0a]/95 backdrop-blur-xl",
-                },
-              }}
-            />
-          </QueryProvider>
-        </SolanaWalletProvider>
+        <Web3Providers>
+          {children}
+          <Toaster
+            theme="dark"
+            richColors
+            position="top-center"
+            toastOptions={{
+              classNames: {
+                toast:
+                  "font-mulish border border-white/[0.1] bg-[#0a0a0a]/95 backdrop-blur-xl",
+              },
+            }}
+          />
+        </Web3Providers>
       </body>
     </html>
   );
