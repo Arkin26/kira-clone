@@ -8,8 +8,14 @@ export const MERCHANT_ID =
 export const MERCHANT_WALLET =
   process.env.NEXT_PUBLIC_MERCHANT_WALLET ?? DEFAULT_MERCHANT_WALLET;
 
+const NEXT_PUBLIC_API_URL = process.env.NEXT_PUBLIC_API_URL?.trim();
+
 export const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3000";
+  NEXT_PUBLIC_API_URL && NEXT_PUBLIC_API_URL.length > 0
+    ? NEXT_PUBLIC_API_URL.replace(/\/+$/, "")
+    : process.env.NODE_ENV !== "production"
+      ? "http://localhost:3000"
+      : "";
 
 /** Optional: must match backend `API_KEY` when that env is set. */
 export const API_KEY = process.env.NEXT_PUBLIC_API_KEY ?? "";
